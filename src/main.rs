@@ -1,7 +1,11 @@
 use std::io;
+use std::io::BufReader;
+use std::io::BufRead;
+use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
+use regex::Regex;
 use threadpool::ThreadPool;
 
 fn handle_client(mut stream: TcpStream) {
@@ -23,10 +27,26 @@ fn handle_client(mut stream: TcpStream) {
     }
 }
 
+fn get_cores() -> usize {
+    let path = "/proc/cpuinfo";
+    let f = File::open(path).unwrap();
+    let re = Regex::new(r"^processor\s+.+$").unwrap();
+
+    let file = BufReader::new(&f);
+    let mut i = 0;
+    for line in file.lines() {
+        let l = line.unwrap();
+        if re.is_match(&l) {
+            i += 1;
+        }
+    }
+    i
+}
+
 fn main() -> io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8081")?;
 
-    let n_workers = 4;
+    let n_workers = get_cores();
     let pool = ThreadPool::new(n_workers);
 
     for stream in listener.incoming() {
