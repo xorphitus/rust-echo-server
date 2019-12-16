@@ -2,6 +2,7 @@ use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
+use std::thread;
 
 fn handle_client(mut stream: TcpStream) {
     loop {
@@ -26,7 +27,10 @@ fn main() -> io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8081")?;
 
     for stream in listener.incoming() {
-        handle_client(stream?)
+        let s = stream?;
+        thread::spawn(|| {
+            handle_client(s)
+        });
     }
 
     Ok(())
