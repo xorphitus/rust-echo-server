@@ -12,7 +12,7 @@ use std::thread;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 
-fn handle_client(mut stream: TcpStream, tx: Sender<&str>) {
+fn handle_client(mut stream: TcpStream, tx: Sender<String>) {
     loop {
         let mut buf = [0; 1024];
         match stream.read(&mut buf) {
@@ -21,12 +21,11 @@ fn handle_client(mut stream: TcpStream, tx: Sender<&str>) {
                     println!("close connection");
                     break;
                 }
+                stream.write_all(&buf[0..n]).unwrap();
                 match stream.write_all(&buf[0..n]) {
                     Ok(_) => {
-                        match tx.send("log!!") {
-                            Ok(_) => {},
-                            Err(_) => {},
-                        }
+                        let l = String::from_utf8(buf[0..n].to_vec()).unwrap();
+                        tx.send(l).unwrap();
                     },
                     Err(e) => panic!("{}", e),
                 }
