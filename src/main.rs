@@ -56,10 +56,8 @@ fn main() -> io::Result<()> {
 
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
-        loop {
-            for r in rx.recv().iter() {
-                println!("{}", r);
-            }
+        for r in rx {
+            println!("{}", r);
         }
     });
 
