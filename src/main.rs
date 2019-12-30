@@ -1,74 +1,80 @@
-use std::io;
-use std::io::BufReader;
-use std::io::BufRead;
 use std::fs::File;
+use std::io;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::thread;
+
+use failure::Error;
 use regex::Regex;
 use threadpool::ThreadPool;
 
-use std::thread;
-use std::sync::mpsc;
-use std::sync::mpsc::Sender;
+const BUF_SIZE: usize = 1024;
+const DEFAULT_WORKER_NUM: usize = 1;
 
-fn handle_client(mut stream: TcpStream, tx: Sender<String>) {
+fn handle_client(mut stream: TcpStream, log_tx: &Sender<String>) -> Result<(), Error> {
     loop {
-        let mut buf = [0; 1024];
-        match stream.read(&mut buf) {
-            Ok(n) => {
-                if n == 0 {
-                    println!("close connection");
-                    break;
-                }
-                stream.write_all(&buf[0..n]).unwrap();
-                match stream.write_all(&buf[0..n]) {
-                    Ok(_) => {
-                        let l = String::from_utf8(buf[0..n].to_vec()).unwrap();
-                        tx.send(l).unwrap();
-                    },
-                    Err(e) => panic!("{}", e),
-                }
-            },
-            Err(e) => panic!("{}", e),
+        let mut buf = [0; BUF_SIZE];
+        let n = stream.read(&mut buf)?;
+        if n == 0 {
+            return Ok(());
         }
+
+        let msg = &&buf[0..n];
+        stream.write_all(msg)?;
+
+        let msg = String::from_utf8(msg.to_vec())?;
+        log_tx.send(msg)?;
     }
 }
 
-fn get_cores() -> usize {
+fn get_cores() -> Result<usize, Error> {
     let path = "/proc/cpuinfo";
-    let f = File::open(path).unwrap();
+    let f = File::open(path)?;
+    // Using `unwrap`: this is reasonable.
+    // Since this program should be terminated ASAP when the regexp is incorrect.
     let re = Regex::new(r"^processor\s+.+$").unwrap();
 
     let file = BufReader::new(&f);
     let mut i = 0;
     for line in file.lines() {
-        let l = line.unwrap();
-        if re.is_match(&l) {
+        if re.is_match(&line?) {
             i += 1;
         }
     }
-    i
+    Ok(i)
 }
 
 fn main() -> io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:8081")?;
-
-    let (tx, rx) = mpsc::channel();
+    // logger
+    let (log_tx, log_rx) = mpsc::channel();
     thread::spawn(move || {
-        for r in rx {
+        for r in log_rx {
             println!("{}", r);
         }
     });
 
-    let n_workers = get_cores();
-    let pool = ThreadPool::new(n_workers);
+    let worker_num = get_cores().unwrap_or_else(|e| {
+        eprintln!("failed to get CPU cores: {}", e);
+        DEFAULT_WORKER_NUM
+    });
+    let pool = ThreadPool::new(worker_num);
 
+    let listener = TcpListener::bind("127.0.0.1:8081")?;
     for stream in listener.incoming() {
         let s = stream?;
-        let t = tx.clone();
-        pool.execute(|| {
-            handle_client(s, t);
+        let tx = log_tx.clone();
+        pool.execute(move || {
+            handle_client(s, &tx)
+                .and_then(|_| {
+                    eprintln!("close connection");
+                    Ok(())
+                })
+                .unwrap_or_else(|e| eprintln!("an error occurred: {}" , e));
         });
     }
 
