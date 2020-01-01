@@ -23,6 +23,8 @@ use failure::Error;
 use regex::Regex;
 use threadpool::ThreadPool;
 
+const IP_ADDRESS: &str = "127.0.0.1";
+const PORT: u16 = 8081;
 const BUF_SIZE: usize = 1024;
 const DEFAULT_WORKER_NUM: usize = 1;
 
@@ -99,7 +101,7 @@ fn main() -> io::Result<()> {
     let pool = ThreadPool::new(worker_num);
     eprintln!("{} workers were set", worker_num);
 
-    let listener = TcpListener::bind("127.0.0.1:8081")?;
+    let listener = TcpListener::bind(format!("{}:{}", IP_ADDRESS, PORT))?;
     for stream in listener.incoming() {
         let s = stream?;
         let tx = log_tx.clone();
