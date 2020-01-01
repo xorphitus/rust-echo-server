@@ -33,7 +33,7 @@ lazy_static! {
 
 #[cfg(target_os = "macos")]
 lazy_static! {
-    static ref CPU_RE: Regex = Regex::new(r"^\s*Number of Processors:\s*(\d+)\s*$").unwrap();
+    static ref CPU_RE: Regex = Regex::new(r"\s*Number of Cores:\s*(\d+)\s*").unwrap();
 }
 
 fn handle_client(mut stream: TcpStream, log_tx: Sender<String>) -> Result<(), Error> {
@@ -75,8 +75,9 @@ fn get_cores() -> Result<usize, Error> {
     let sys_prof = String::from_utf8(sys_prof.stdout)?;
 
     let num = CPU_RE.captures(&sys_prof)
-        .and_then(|cap| cap.get(0))
+        .and_then(|cap| cap.get(1))
         .ok_or_else(|| failure::err_msg("couldn't find a CPU core number from `system_profiler SPHardwareDataType`"))?;
+
     let num = num.as_str().parse::<usize>()?;
     Ok(num)
 }
@@ -96,6 +97,7 @@ fn main() -> io::Result<()> {
         DEFAULT_WORKER_NUM
     });
     let pool = ThreadPool::new(worker_num);
+    eprintln!("{} workers were set", worker_num);
 
     let listener = TcpListener::bind("127.0.0.1:8081")?;
     for stream in listener.incoming() {
