@@ -1,3 +1,4 @@
+extern crate chrono;
 #[macro_use]
 extern crate lazy_static;
 
@@ -17,6 +18,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
 
+use chrono::{DateTime, Local};
 use failure::Error;
 use regex::Regex;
 use threadpool::ThreadPool;
@@ -34,7 +36,7 @@ lazy_static! {
     static ref CPU_RE: Regex = Regex::new(r"^\s*Number of Processors:\s*(\d+)\s*$").unwrap();
 }
 
-fn handle_client(mut stream: TcpStream, log_tx: &Sender<String>) -> Result<(), Error> {
+fn handle_client(mut stream: TcpStream, log_tx: Sender<String>) -> Result<(), Error> {
     loop {
         let mut buf = [0; BUF_SIZE];
         let n = stream.read(&mut buf)?;
@@ -84,7 +86,8 @@ fn main() -> io::Result<()> {
     let (log_tx, log_rx) = mpsc::channel();
     thread::spawn(move || {
         for r in log_rx {
-            println!("{}", r);
+            let time: DateTime<Local> = Local::now();
+            println!("{}\t{}", time, r);
         }
     });
 
@@ -97,8 +100,9 @@ fn main() -> io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8081")?;
     for stream in listener.incoming() {
         let s = stream?;
-        pool.execute(move || {
-            handle_client(s, &log_tx)
+        let tx = log_tx.clone();
+        pool.execute(|| {
+            handle_client(s, tx)
                 .and_then(|_| {
                     eprintln!("close connection");
                     Ok(())
