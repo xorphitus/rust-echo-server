@@ -46,7 +46,7 @@ fn handle_client(mut stream: TcpStream, log_tx: Sender<String>) -> Result<(), Er
             return Ok(());
         }
 
-        let msg = &&buf[0..n];
+        let msg = &buf[0..n];
         stream.write_all(msg)?;
 
         let msg = String::from_utf8(msg.to_vec())?;
