@@ -60,13 +60,21 @@ fn get_cores() -> Result<usize, Error> {
     let f = File::open(path)?;
 
     let file = BufReader::new(&f);
-    let mut i = 0;
+
+    // Probably the following code is also correct and more beautiful,
+    // However it can not handle errors for each `line?`.
+    //
+    //   let num = file.lines()
+    //       .flat_map(|line| line)
+    //       .filter(|line| CPU_RE.is_match(l))
+    //       .count();
+    let mut num = 0;
     for line in file.lines() {
         if CPU_RE.is_match(&line?) {
-            i += 1;
+            num += 1;
         }
     }
-    Ok(i)
+    Ok(num)
 }
 
 #[cfg(target_os = "macos")]
